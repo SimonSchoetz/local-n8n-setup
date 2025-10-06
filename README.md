@@ -1,38 +1,67 @@
 # My n8n local setup
 
+A quick local n8n setup with ngrok tunnel for developing and testing
+
 ## Setup
 
-Create Project Directory
+### local setup
+
+- install docker
+
+Create Project Directory with subdirectory for persistent data
 
 ```sh
-# Create dedicated directory for n8n data persistence
-mkdir -p ~/n8n-local
-cd ~/n8n-local
+mkdir -p [dir-path]/n8n-local
 
-# Create subdirectory for persistent data
+cd [dir-path]/n8n-local
+
 mkdir -p .n8n
 ```
 
 Pull and run n8n container
 
 ```sh
-# Pull latest n8n image (one-time, ~500MB download)
 docker pull n8nio/n8n
 
-# Run n8n container with proper configuration
 docker run -d \
   --name n8n \
   -p 5678:5678 \
-  -v ~/n8n-local/.n8n:/home/node/.n8n \
+  -v ~/dev/n8n-local/.n8n:/home/node/.n8n \
   -e N8N_SECURE_COOKIE=false \
-  -e GENERIC_TIMEZONE="America/Los_Angeles" \
-  -e TZ="America/Los_Angeles" \
+  -e GENERIC_TIMEZONE="Europe/Berlin" \
+  -e TZ="Europe/Berlin" \
   n8nio/n8n
 ```
 
-open http://localhost:5678
+n8n is now accessible via [localhost:5678](http://localhost:5678). You can now sign up to n8n with an imaginative email since this is running locally.
 
-## Getting started
+### Connect to internet via ngrok tunnel
 
-- sign up (doesn't need to be actual email)
-- go nuts!
+- install and set up ngrok
+
+run the following command to link port with tunnel
+
+```sh
+ngrok http 5678
+```
+
+This will generate a URL like `https://xxxx-xx-xx-xx-xx.ngrok-free.app`. It'll show in your terminal. Note that it'll be publicly available
+
+Now, we have to "rewire" our docker container. We have to stop it, remove it, and initiate it again with our URL:
+
+```sh
+docker stop n8n
+docker rm n8n
+
+docker run -d \
+  --name n8n \
+  -p 5678:5678 \
+  -v ~/dev/n8n-local/.n8n:/home/node/.n8n \
+  -e N8N_SECURE_COOKIE=false \
+  -e GENERIC_TIMEZONE="Europe/Berlin" \
+  -e TZ="Europe/Berlin" \
+  -e WEBHOOK_URL="[CREATED_URL]" \
+  n8nio/n8n
+```
+
+Visit the created url and sign in with the credentials you used locally.
