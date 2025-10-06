@@ -1,4 +1,4 @@
-# My n8n local setup
+# My local n8n installation guide
 
 A quick local n8n setup with ngrok tunnel for developing and testing
 
@@ -65,3 +65,8 @@ docker run -d \
 ```
 
 Visit the created url and sign in with the credentials you used locally.
+
+### Visual reference
+
+File tree when everything is set up properly:
+![visual reference of file tree when everything is installed properly](docs/img/screenshot-file-tree.png 'File Tree')
