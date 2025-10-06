@@ -66,6 +66,10 @@ docker run -d \
 
 Visit the created url and sign in with the credentials you used locally.
 
+## Notes
+
+If you use version control, add a `.gitignore` so you don't upload/expose your local n8n container
+
 ### Visual reference
 
 File tree when everything is set up properly:
