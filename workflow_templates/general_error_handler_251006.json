@@ -1,0 +1,91 @@
+{
+  "name": "General Error Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "fromEmail": "n8n@simonschoetz.de",
+        "toEmail": "info@simonschoetz.de",
+        "subject": "={{ $json.email_subject }}",
+        "text": "={{ $json.email_body }}",
+        "options": {}
+      },
+      "id": "b5b3dc76-6e53-46ce-acfa-6b4e9bcca810",
+      "name": "Send_Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "webhookId": "5d33cafd-7acd-40b4-a486-aa0b4837476f",
+      "credentials": {
+        "smtp": {
+          "id": "lXVL1OevLMuiXWnQ",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle both array and object inputs\nconst errorMsg = $input.first().json;\n\nconst { workflow } = errorMsg\n\n// Pretty print full error object\nconst fullErrorJson = JSON.stringify(errorMsg, null, 2);\n\nreturn {\n  email_subject: `[n8n Error] - ${workflow.name}`,\n  email_body: `Full error message:\n  \n  ${fullErrorJson}`\n};"
+      },
+      "id": "84e6cc2a-ffc9-46dd-9366-85b1a51d73bd",
+      "name": "Create_Error_Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ec8c2fa2-b5fc-4fb8-bcd9-9e2d8b38d612",
+      "name": "Catch_Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "alwaysOutputData": false
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Create_Error_Message": {
+      "main": [
+        [
+          {
+            "node": "Send_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catch_Error": {
+      "main": [
+        [
+          {
+            "node": "Create_Error_Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "ec373182-1a39-4038-bd54-74dc2d039ac2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cf4c79126c4e7e2b2c59d2fae9d16c9320d9c00d13960f6088bbc7dfba18f30b"
+  },
+  "id": "MEPx4KW2b1CjUxh3",
+  "tags": []
+}

@@ -2,6 +2,13 @@
 
 A quick local n8n setup with ngrok tunnel for developing and testing
 
+Note: Feel free to import my workflows but be aware that they are set up for my own specifications. To use everything as is you have to
+
+- Set up your own credentials (e.g. GitHub API, Anthropic API, SMTP)
+- Update the error Workflow ID
+- Adjust triggers, e. g. which repo is triggering the PR review workflow
+- ect.
+
 ## Setup
 
 ### local setup

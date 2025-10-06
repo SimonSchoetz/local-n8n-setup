@@ -1,0 +1,300 @@
+{
+  "name": "Code Review Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "options": {
+          "maxTokensToSample": 4096,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [960, 224],
+      "id": "abbb0d6e-3a81-47d1-ba88-f6d419a99143",
+      "name": "Claude Sonnet 4",
+      "notesInFlow": true,
+      "credentials": {
+        "anthropicApi": {
+          "id": "L2d94UOO2NGNMvyS",
+          "name": "Anthropic account"
+        }
+      },
+      "notes": "4.5 is not properly configurable atm"
+    },
+    {
+      "parameters": {
+        "owner": {
+          "__rl": true,
+          "value": "https://github.com/SimonSchoetz",
+          "mode": "url"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "https://github.com/SimonSchoetz/gm-tool",
+          "mode": "url"
+        },
+        "events": ["pull_request"],
+        "options": {
+          "insecureSSL": false
+        }
+      },
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [-16, -96],
+      "id": "92d32a88-49f4-4c10-af46-c028c804a5e8",
+      "name": "GM_Tool_PR_Listener",
+      "webhookId": "0c624211-2d78-4866-8d9d-7c8c8467fe43",
+      "notesInFlow": true,
+      "retryOnFail": false,
+      "credentials": {
+        "githubApi": {
+          "id": "sWQ4guz9ZL58NfvB",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $input.first().json.body;\n\nreturn {\n  repo_owner: trigger.repository.owner.login,\n  repo_name: trigger.repository.name,\n  pr_number: trigger.pull_request.number,\n  pr_title: trigger.pull_request.title,\n  pr_description: trigger.pull_request.body || \"\",\n  pr_url: trigger.pull_request.url,\n  files_url: `${trigger.pull_request.url}/files`,\n  commit_sha: trigger.pull_request.head.sha\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [208, -96],
+      "id": "9f520602-8e06-4c0f-a88b-c6483051afff",
+      "name": "Extract_PR_Data"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.files_url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [432, 0],
+      "id": "cb2967df-e44e-4412-99aa-81b39e0100d9",
+      "name": "Fetch_PR_Files",
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert code reviewer analyzing a GitHub Pull Request without full repository context.\n\n**Context:**\n- PR Title: {{ $json.context.pr_title }}\n- PR Description: {{ $json.context.pr_description }}\n- Package.json: {{ JSON.stringify($json.context.package_json) }}\n\n**Files Changed:**\n{{ JSON.stringify($json.files) }}\n\n**Your Task:**\nAnalyze all changed files and provide comprehensive feedback following the structure below.\n\n**Code Quality Rules to Enforce:**\n- No leftover console.log statements in production code\n- No magic numbers (use named constants)\n- [Add additional rules here as needed]\n\n**Review Priorities:**\n1. **Security vulnerabilities** - Identify any security risks or unsafe patterns\n2. **Performance issues** - Flag inefficient code, unnecessary re-renders, memory leaks\n3. **Code quality violations** - Check against the rules list above\n4. **Best practices** - Ensure code follows language/framework conventions\n5. **Breaking changes** - Identify changes that could break existing functionality\n\n**Field Specifications:**\n\n1. **summary**: \n   - **FIRST: Check for context errors** - Before reviewing code, check if any context data contains error messages or failed to load:\n     - Package.json (should be valid JSON object, not error string)\n     - PR Title (should be non-empty string)\n     - PR Description (can be empty, that's ok)\n     - Files Changed (should be array of file objects with patches)\n   - If ANY context contains errors, start your summary with: \"Context error: [describe which context failed]. Review may be incomplete. \\n\\n\"\n   - **Do NOT summarize what the PR does** - that's what the PR description is for\n   - Provide a code quality verdict (2-3 sentences covering: overall quality, adherence to rules, any concerns)\n   - When PR description exists: Flag if the changes diverge from stated intent (only mention this if there's an actual discrepancy)\n   - Examples of good summaries: \"Code quality is solid with proper error handling and no rule violations.\" OR \"Found security concerns with user input handling and two rule violations (console.logs).\"\n   - **Always end with**: \"\\n\\n⚠️ AI review conducted without full repository context.\"\n\n2. **issues**: \n   - Array of specific problems found in the changed code\n   - Each issue requires:\n     - **path**: Exact filename from the files array\n     - **line**: Actual line number in the NEW version of the file where the issue exists (use absolute line numbers, not relative patch positions)\n     - **body**: Clear explanation with actionable fix suggestion\n   - Only report: bugs, security flaws, performance problems, rule violations, breaking changes\n   - Skip minor style preferences unless they impact maintainability\n   - Focus exclusively on code introduced or modified in this PR\n\n**Line Number Guidelines:**\n- Use the actual line number from the NEW file version where the issue exists\n- The patch shows context - use it to identify the correct absolute line number\n- Example: If patch shows `@@ -10,5 +12,7 @@` and issue is on the 3rd new line, the line number is 14 (12 + 2)\n\n**Critical Constraints:**\n- You are reviewing WITHOUT full repository context - acknowledge this in your summary\n- Return ONLY valid JSON, no markdown code blocks, no explanatory text\n- Be thorough but focus on actual issues, not nitpicks\n- Only comment on code visible in the provided patches\n\n**Remember:** Your role is to catch real problems and enforce code quality rules for this specific PR.\n\n**Output Requirements:**\nReturn ONLY valid JSON with this exact structure:\n{\n  \"summary\": \"string\",\n  \"issues\": [\n    {\n      \"path\": \"string\",\n      \"line\": number,\n      \"body\": \"string\"\n    }\n  ]\n}\n\n**OUTPUT FORMAT - CRITICAL:**\nYour entire response must be ONLY the raw JSON object. \n- Start with { \n- End with }\n- NO markdown code blocks (no ```json or ```)\n- NO explanatory text before or after\n- NO additional formatting\n\nExample of CORRECT output:\n{\"summary\": \"text\", \"issues\": []}\n\nExample of INCORRECT output:\n```json\n{\"summary\": \"text\", \"issues\": []}\n```",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [880, 0],
+      "id": "f47f289f-0899-45f7-9dd6-faa8803573eb",
+      "name": "Code Review Agent",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get PR data\nconst prData = $('Combine_Files_And_Context').first().json;\n\n// Parse Claude's JSON output (it's a string)\nconst aiOutput = JSON.parse($input.first().json.output);\n\n// Transform into GitHub's Create Review format\nreturn {\n  owner: prData.repo_owner,\n  repo: prData.repo_name,\n  pull_number: prData.pr_number,\n  commit_id: prData.commit_sha,\n  body: aiOutput.summary,\n  event: \"COMMENT\",\n  comments: aiOutput.issues.map(issue => ({\n    path: issue.path,\n    body: issue.body,\n    line: issue.line\n  }))\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1232, 0],
+      "id": "19d376de-38e0-4997-9689-81cd5adc9a8c",
+      "name": "Format_GitHub_Review"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/pulls/{{ $json.pull_number }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "commit_id",
+              "value": "={{ $json.commit_id }}"
+            },
+            {
+              "name": "=body",
+              "value": "={{ $json.body }}"
+            },
+            {
+              "name": "event",
+              "value": "={{ $json.event }}"
+            },
+            {
+              "name": "comments",
+              "value": "={{ $json.comments }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1456, 0],
+      "id": "05082ccf-0026-4226-b652-f630951c6fde",
+      "name": "POST_Review",
+      "credentials": {
+        "githubApi": {
+          "id": "sWQ4guz9ZL58NfvB",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/{{ $('Extract_PR_Data').first().json.repo_owner }}/{{ $('Extract_PR_Data').first().json.repo_name }}/{{ $('Extract_PR_Data').first().json.commit_sha }}/package.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [432, -192],
+      "id": "0167e31a-8988-400c-809a-d0fa1fe5a609",
+      "name": "Fetch_Package_Json",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prData = $('Extract_PR_Data').first().json;\nconst packageJson = $('Fetch_Package_Json').first().json;\n\nconst pJson = packageJson?.data || `Failed to fetch package.json: ${packageJson.error.message}`\n\nconst files = $input.all();\n\nreturn {\n  context: {\n    pr_title: prData.pr_title,\n    pr_description: prData.pr_description,\n    package_json: pJson,\n  },\n  pr_number: prData.pr_number,\n  repo_owner: prData.repo_owner,\n  repo_name: prData.repo_name,\n  commit_sha: prData.commit_sha,\n  files\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [656, 0],
+      "id": "d9fdc22e-1e86-409b-9438-ab380975e490",
+      "name": "Combine_Files_And_Context"
+    },
+    {
+      "parameters": {
+        "content": "# Error Handling Strategy\n\nHttp requests have 2 retries, agent has 1 retry\n\n## Critical/unhandled\n\n- all nodes in the main chain are considered critical\n- will be caught by global error catcher workflow and sent to email\n\n## Uncritical errors\n\n- parallel nodes that provide additional context (like package.json)\n- create error message that will be added to the summary message of the PR review\n",
+        "height": 400,
+        "width": 528
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1024, -448],
+      "typeVersion": 1,
+      "id": "ca5695f6-67a4-41a0-aeb9-a438166fa16f",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Claude Sonnet 4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Code Review Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GM_Tool_PR_Listener": {
+      "main": [
+        [
+          {
+            "node": "Extract_PR_Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract_PR_Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch_PR_Files",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch_Package_Json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_PR_Files": {
+      "main": [
+        [
+          {
+            "node": "Combine_Files_And_Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Review Agent": {
+      "main": [
+        [
+          {
+            "node": "Format_GitHub_Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format_GitHub_Review": {
+      "main": [
+        [
+          {
+            "node": "POST_Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_Package_Json": {
+      "main": [[], []]
+    },
+    "Combine_Files_And_Context": {
+      "main": [
+        [
+          {
+            "node": "Code Review Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "MEPx4KW2b1CjUxh3",
+    "timeSavedPerExecution": 15
+  },
+  "versionId": "cf2e69a5-0504-4456-9d73-e509b192e6ac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cf4c79126c4e7e2b2c59d2fae9d16c9320d9c00d13960f6088bbc7dfba18f30b"
+  },
+  "id": "HJ2qxG1jahaD8Zk7",
+  "tags": []
+}
